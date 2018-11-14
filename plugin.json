@@ -1,7 +1,7 @@
 {
-    "id": "com.mattermost.sample-plugin",
-    "name": "Sample Plugin",
-    "description": "This plugin serves as a starting point for writing a Mattermost plugin.",
+    "id": "ca.taffer.mm-quotebot",
+    "name": "Quotebot",
+    "description": "Remember quotations and spit them out on command.",
     "version": "0.0.1",
     "server": {
         "executables": {
@@ -10,12 +10,26 @@
             "windows-amd64": "server/dist/plugin-windows-amd64.exe"
         }
     },
-    "webapp": {
-        "bundle_path": "webapp/dist/main.js"
-    },
     "settings_schema": {
-        "header": "",
-        "footer": "",
-        "settings": []
+        "header": "GitHub repository: [Taffer/ca.taffer.mm-quotebot](https://github.com/Taffer/ca.taffer.mm-quotebot)",
+        "footer": "Please report issues in the GitHub repo. All code is [MIT licensed](https://github.com/Taffer/ca.taffer.mm-quotebot/blob/develop/LICENSE). Full credits can be found in the [README](https://github.com/Taffer/ca.taffer.mm-rolly/blob/develop/README.md).",
+        "settings": [
+            {
+                "key": "channel",
+                "display_name": "Channel",
+                "type": "text",
+                "help_text": "Random quote channel",
+                "placeholder": "Too frequent is annoying.",
+                "default": "town-square",
+            },
+            {
+                "key": "interval",
+                "display_name": "Interval",
+                "type": "text",
+                "help_text": "Random quote interval (minutes)",
+                "placeholder": "Too frequent is annoying.",
+                "default": "60",
+            }
+        ]
     }
 }

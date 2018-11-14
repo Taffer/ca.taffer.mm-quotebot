@@ -1,9 +1,15 @@
 package main
 
 import (
+	"math/rand"
+	"time"
+
 	"github.com/mattermost/mattermost-server/plugin"
 )
 
 func main() {
-	plugin.ClientMain(&Plugin{})
+	quotebot := &QuotebotPlugin{}
+
+	rand.Seed(time.Now().UnixNano())
+	plugin.ClientMain(quotebot)
 }
