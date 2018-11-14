@@ -56,7 +56,17 @@ const (
 func (p *QuotebotPlugin) OnActivate() error {
 	p.active = true
 
-	return nil
+	err := p.API.RegisterCommand(&model.Command{
+		Trigger:          trigger,
+		Description:      "Keep track of quotes and post them!",
+		DisplayName:      pluginName,
+		AutoComplete:     true,
+		AutoCompleteDesc: "📜 Keep track of quotes and post them! Use `/" + trigger + " help` for usage.",
+		AutoCompleteHint: "help",
+		IconURL:          iconURI,
+	})
+
+	return err
 }
 
 // OnDeactivate - Plugin has been deactivated.
@@ -174,7 +184,7 @@ func (p *QuotebotPlugin) NewResponse(responseType string, responseText string) *
 
 // NewError - Create a new error object.
 func (p *QuotebotPlugin) NewError(message string, details string, where string) *model.AppError {
-	return *model.AppError{
+	return &model.AppError{
 		Message:       message,
 		DetailedError: details,
 		Where:         where,

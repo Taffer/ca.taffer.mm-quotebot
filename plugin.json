@@ -20,7 +20,7 @@
                 "type": "text",
                 "help_text": "Random quote channel",
                 "placeholder": "Too frequent is annoying.",
-                "default": "town-square",
+                "default": "town-square"
             },
             {
                 "key": "interval",
@@ -28,7 +28,7 @@
                 "type": "text",
                 "help_text": "Random quote interval (minutes)",
                 "placeholder": "Too frequent is annoying.",
-                "default": "60",
+                "default": "60"
             }
         ]
     }
