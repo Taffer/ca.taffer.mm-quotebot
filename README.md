@@ -33,6 +33,7 @@ TODO: Monitor multiple channels.
 Output:
 
 > I feel pretty. -- @shane
+> It's like _Speed_ but more stupid. -- @chris
 
 Quotebot could also handle responses, with a set of commands like this:
 

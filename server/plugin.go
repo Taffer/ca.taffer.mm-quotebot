@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -25,6 +26,8 @@ type QuotebotPlugin struct {
 	active   bool      // Is the plugin currently active?
 	lastPost time.Time // When did we last post a random quotation?
 	channel  string    // The Channel ID of the channel we randomly post to.
+
+	commandPattern *regexp.Regexp
 }
 
 // QuoteText - We track the quote and who said it.
@@ -46,7 +49,29 @@ const (
 	trigger      string = "quote"
 	slashTrigger string = "/" + trigger
 	pluginName   string = "Quotebot"
+
+	// ^/quote\s*(?P<command>(add|list|delete)\s*)?(?P<tail>.*)\s*$
+	commandRegex string = `(?i)^` + slashTrigger + `\s*(?P<command>(add|list|delete)\s*)?(?P<tail>.*)\s*$`
 )
+
+// -----------------------------------------------------------------------------
+// Utility functions.
+// -----------------------------------------------------------------------------
+
+// FindNamedSubstrings - Return a map of named matches.
+func FindNamedSubstrings(re *regexp.Regexp, candidate string) map[string]string {
+	found := make(map[string]string)
+
+	values := re.FindStringSubmatch(candidate)
+	keys := re.SubexpNames()
+
+	// Why do you start indexing keys at 1 instead of 0?
+	for idx := 1; idx < len(keys); idx++ {
+		found[keys[idx]] = values[idx]
+	}
+
+	return found
+}
 
 // -----------------------------------------------------------------------------
 // Plugin callbacks
@@ -55,6 +80,7 @@ const (
 // OnActivate - Plugin has been activated.
 func (p *QuotebotPlugin) OnActivate() error {
 	p.active = true
+	p.commandPattern = regexp.MustCompile(commandRegex)
 
 	err := p.API.RegisterCommand(&model.Command{
 		Trigger:          trigger,
@@ -82,24 +108,42 @@ func (p *QuotebotPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandAr
 		return nil, nil
 	}
 
-	if strings.HasPrefix(args.Command, slashTrigger) == false {
+	if p.commandPattern.MatchString(args.Command) == false {
 		// It's not for us.
 		return nil, nil
 	}
 
+	// Dig out the command and tail.
+	matches := FindNamedSubstrings(p.commandPattern, args.Command)
+	command := matches["command"]
+	tail := matches["tail"]
+
 	var response *model.CommandResponse
 	var responseError *model.AppError
 
-	if args.Command == slashTrigger {
-		// "/quote" - Show a random quote.
-		response, responseError = p.ShowRandom()
+	if command == "" {
+		if tail == "" {
+			// "/quote" - Show a random quote.
+			response, responseError = p.ShowRandom()
+		} else {
+			// If tail is a number, show that quote.
+			num, err := strconv.Atoi(tail)
+			if err == nil {
+				response, responseError = p.ShowQuote(num)
+			} else {
+				response, responseError = p.ShowHelp()
+			}
+		}
 	} else {
-		parts := strings.Fields(args.Command[len(slashTrigger):])
-
-		switch strings.ToLower(parts[0]) {
+		switch strings.ToLower(strings.TrimSpace(command)) {
 		case "add":
 			// Anyone can add quotes.
-			response, responseError = p.AddQuote(strings.TrimSpace(args.Command[strings.Index(args.Command, parts[0])+len(parts[0]):]))
+			if len(tail) > 0 {
+				response, responseError = p.AddQuote(tail)
+			} else {
+				response = nil
+				responseError = p.NewError("Empty quote.", "Try adding a quote with some text.", "QuotebotPlugin.ExecuteCommand")
+			}
 
 		case "help":
 			// Anyone can ask for help.
@@ -110,15 +154,10 @@ func (p *QuotebotPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandAr
 			response, responseError = p.ListQuotes()
 
 		case "delete":
-			// Delete a quote specified by parts[1] as a number. Admins only.
-			num, _ := strconv.Atoi(parts[1])
-			response, responseError = p.DeleteQuote(num)
-
-		default:
-			// If parts[1] is a number, show that quote.
-			num, err := strconv.Atoi(parts[1])
+			// Delete a quote specified by tail as a number. Admins only.
+			num, err := strconv.Atoi(tail)
 			if err == nil {
-				response, responseError = p.ShowQuote(num)
+				response, responseError = p.DeleteQuote(num)
 			} else {
 				response, responseError = p.ShowHelp()
 			}
