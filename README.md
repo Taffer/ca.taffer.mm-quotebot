@@ -18,24 +18,29 @@ Commands:
 
 * /quote - Regurgitate a random quote.
 * /quote *x* - Show quote number *x*.
-* /quote add *genius quote* - Store *genius quote* for later.
+* /quote add *genius quote* - Store *genius quote* for later. Don't forget to
+  include an attribution!
+* /quote help - Show the help.
 
-Admin commands (assuming I can tell if the user is an admin or not):
+Admin commands:
 
-* /quote list - List all known quotes.
+* /quote channel *x* - Monitor channel *x* for activity and randomly show
+  quotes there.
 * /quote delete *x* - Delete quote number *x*.
+* /quote interval *x* - The time between automatically posting quotes in a
+  channel.
+* /quote list - List all known quotes.
 
-Periodically post a random quote to a specified channel. Default is every 24
-hours in `~town-square` if there's activity there.
+Periodically posts a random quote to a specified channel. Default is every 60
+minutes in `~town-square` if there's activity there.
 
 TODO: Monitor multiple channels.
 
 Output:
 
 > I feel pretty. -- @shane
-> It's like _Speed_ but more stupid. -- @chris
 
-Quotebot could also handle responses, with a set of commands like this:
+Quotebot _could_ also handle responses, with a set of commands like this:
 
 * /response add "*trigger*" "*response text*" - Say *response text* when
   someone writes *trigger*.
@@ -47,6 +52,8 @@ Admin commands for `/response`:
 
 The responses would have their own channel separate from the quotes, and a 1/*x*
 chance of responding to a matched trigger so it doesn't get annoying.
+
+> It's like _Speed_ but more stupid. -- @chris
 
 TODO: Monitor multiple channels.
 

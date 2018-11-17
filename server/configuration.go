@@ -18,6 +18,8 @@ import (
 type configuration struct {
 	postDelta   float64 // Minutes between posting random quotations.
 	postChannel string  // Channel to post random quotations to.
+
+	quotes []string // All of the quotes we know.
 }
 
 // Clone shallow copies the configuration. Your implementation may require a deep copy if
