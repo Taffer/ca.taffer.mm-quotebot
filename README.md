@@ -24,21 +24,24 @@ Commands:
 
 Admin commands:
 
-* /quote channel *x* - Monitor channel *x* for activity and randomly show
-  quotes there.
+* **TODO** /quote channel *x* - Monitor channel *x* for activity and randomly
+  show quotes there.
 * /quote delete *x* - Delete quote number *x*.
-* /quote interval *x* - The time between automatically posting quotes in a
-  channel.
+* **TODO** /quote interval *x* - The time between automatically posting quotes
+  in a channel.
 * /quote list - List all known quotes.
 
 Periodically posts a random quote to a specified channel. Default is every 60
 minutes in `~town-square` if there's activity there.
 
-TODO: Monitor multiple channels.
+**TODO:** Make it periodically post.
+**TODO:** Monitor multiple channels.
 
 Output:
 
 > I feel pretty. -- @shane
+
+**TODO:** Handle responses, or make a Responsebot:
 
 Quotebot _could_ also handle responses, with a set of commands like this:
 
@@ -54,8 +57,6 @@ The responses would have their own channel separate from the quotes, and a 1/*x*
 chance of responding to a matched trigger so it doesn't get annoying.
 
 > It's like _Speed_ but more stupid. -- @chris
-
-TODO: Monitor multiple channels.
 
 ## Credits
 
