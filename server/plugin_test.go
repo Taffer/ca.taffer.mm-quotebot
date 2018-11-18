@@ -305,7 +305,7 @@ func TestExecuteCommandAdmin(t *testing.T) {
 	resp, err = runTestPluginCommandAdmin(t, "/quote list")
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
-	assert.EqualValues(t, resp.Text, "`ListQuotes()`")
+	assert.EqualValues(t, resp.Text, "There are 0 quotes on file.")
 }
 
 // // TestMessageHasBeenPosted - Test the MessageHasBeenPosted callback.

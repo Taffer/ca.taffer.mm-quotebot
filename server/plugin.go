@@ -336,7 +336,13 @@ func (p *QuotebotPlugin) DeleteQuote(userID string, num int) (*model.CommandResp
 // ListQuotes - List the known quotes.
 func (p *QuotebotPlugin) ListQuotes(userID string) (*model.CommandResponse, *model.AppError) {
 	if p.IsAdmin(userID) {
-		return p.NewResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, "`ListQuotes()`"), nil
+		response := fmt.Sprintf("There are %d quotes on file.", len(p.configuration.quotes))
+
+		for idx := range p.configuration.quotes {
+			response += fmt.Sprintf("\n%d = %q", idx, p.configuration.quotes[idx])
+		}
+
+		return p.NewResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, response), nil
 	}
 
 	return nil, p.NewError("Can't list.", "Only admins can list the quotes.", "ListQuotes")
