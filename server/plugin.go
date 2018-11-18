@@ -93,7 +93,11 @@ func FindNamedSubstrings(re *regexp.Regexp, candidate string) map[string]string 
 // OnActivate - Plugin has been activated.
 func (p *QuotebotPlugin) OnActivate() error {
 	p.active = true
-	p.configuration = new(configuration)
+
+	configuration = new(configuration)
+	p.loadConfiguration(configuration)
+	p.setConfiguration(configuration)
+
 	p.commandPattern = regexp.MustCompile(commandRegex)
 
 	err := p.API.RegisterCommand(&model.Command{

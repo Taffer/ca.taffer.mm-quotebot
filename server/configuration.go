@@ -57,22 +57,37 @@ func (p *QuotebotPlugin) setConfiguration(configuration *configuration) {
 	defer p.configurationLock.Unlock()
 
 	if configuration != nil && p.configuration == configuration {
-		panic("setConfiguration called with the existing configuration")
+		panic("setConfiguration called with the existing configuration.")
 	}
 
 	p.configuration = configuration
 }
 
-// OnConfigurationChange is invoked when configuration changes may have been made.
-func (p *QuotebotPlugin) OnConfigurationChange() error {
-	var configuration = new(configuration)
-
+func (p *QuotebotPlugin) loadConfiguration(configuration *configuration) error {
 	// Load the public configuration fields from the Mattermost server configuration.
 	if err := p.API.LoadPluginConfiguration(configuration); err != nil {
-		return errors.Wrap(err, "failed to load plugin configuration")
+		return errors.Wrap(err, "Failed to load plugin configuration.")
 	}
 
-	p.setConfiguration(configuration)
+	return nil
+}
+
+func (p *QuotebotPlugin) saveConfiguration(configuration *configuration) error {
+	// Save the configuration.
+	if err := p.API.SavePluginConfiguration(configuration); err != nil {
+		return errors.Wrap(err, "Failed to save plugin configuration.")
+	}
+
+	return nil
+}
+
+// OnConfigurationChange is invoked when configuration changes may have been made.
+func (p *QuotebotPlugin) OnConfigurationChange() error {
+	configuration := new(configuration)
+	err := p.loadConfiguration(configuration)
+	if err == nil {
+		p.setConfiguration(configuration)
+	}
 
 	return nil
 }
