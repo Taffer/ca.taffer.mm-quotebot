@@ -170,15 +170,15 @@ func (p *QuotebotPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandAr
 				responseError = p.NewError("Empty quote.", "Try adding a quote with some text.", "ExecuteCommand")
 			}
 
-		case "channel": // Admins only.
-			// Tell the bot which channel to monitor.
-			if len(tail) > 0 {
-				// Attempt to find "tail" as a channel name.
-				response, responseError = p.SetChannel(args.UserId, tail, args.TeamId)
-			} else {
-				response = nil
-				responseError = p.NewError("Empty channel.", "You have to specify a channel name.", "ExecuteCommand")
-			}
+		// case "channel": // Admins only.
+		// 	// Tell the bot which channel to monitor.
+		// 	if len(tail) > 0 {
+		// 		// Attempt to find "tail" as a channel name.
+		// 		response, responseError = p.SetChannel(args.UserId, tail, args.TeamId)
+		// 	} else {
+		// 		response = nil
+		// 		responseError = p.NewError("Empty channel.", "You have to specify a channel name.", "ExecuteCommand")
+		// 	}
 
 		case "delete": // Admins only.
 			// Delete a quote specified by tail as a number.
@@ -194,16 +194,16 @@ func (p *QuotebotPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandAr
 			// Anyone can ask for help.
 			response, responseError = p.ShowHelp()
 
-		case "interval": // Admins only.
-			// Change the posting interval, in minutes.
-			num, err := strconv.Atoi(tail)
-			if err == nil {
-				response, responseError = p.SetInterval(args.UserId, num)
-			} else {
-				response = nil
-				responseError = p.NewError("Invalid interval.", "You have to specify an interval, in minutes.",
-					"ExecuteCommand")
-			}
+		// case "interval": // Admins only.
+		// 	// Change the posting interval, in minutes.
+		// 	num, err := strconv.Atoi(tail)
+		// 	if err == nil {
+		// 		response, responseError = p.SetInterval(args.UserId, num)
+		// 	} else {
+		// 		response = nil
+		// 		responseError = p.NewError("Invalid interval.", "You have to specify an interval, in minutes.",
+		// 			"ExecuteCommand")
+		// 	}
 
 		case "list":
 			// List all known quotes. Admins only.
@@ -298,18 +298,18 @@ func (p *QuotebotPlugin) NewError(message string, details string, where string) 
 	}
 }
 
-// PostRandom - Post a random quotation if enough time has passed.
-func (p *QuotebotPlugin) PostRandom() {
-	now := time.Now()
-	delta := now.Sub(p.lastPost)
+// // PostRandom - Post a random quotation if enough time has passed.
+// func (p *QuotebotPlugin) PostRandom() {
+// 	now := time.Now()
+// 	delta := now.Sub(p.lastPost)
 
-	if delta.Minutes() > p.configuration.postDelta {
-		p.lastPost = now
+// 	if delta.Minutes() > p.configuration.postDelta {
+// 		p.lastPost = now
 
-		// TODO: post a random quote to p.configuration.postChannel.
-		// p.channelID is the Channel ID of p.configuration.postChannel.
-	}
-}
+// 		// TODO: post a random quote to p.configuration.postChannel.
+// 		// p.channelID is the Channel ID of p.configuration.postChannel.
+// 	}
+// }
 
 // -----------------------------------------------------------------------------
 // Quotebot commands
@@ -317,7 +317,11 @@ func (p *QuotebotPlugin) PostRandom() {
 
 // AddQuote - Add the given quote to the quote database.
 func (p *QuotebotPlugin) AddQuote(quote string) (*model.CommandResponse, *model.AppError) {
-	return p.NewResponse(model.COMMAND_RESPONSE_TYPE_IN_CHANNEL, fmt.Sprintf("`AddQuote(%q)`", quote)), nil
+	// TODO: Should we search the list for "quote" before adding it?
+	p.configuration.quotes = append(p.configuration.quotes, quote)
+
+	return p.NewResponse(model.COMMAND_RESPONSE_TYPE_IN_CHANNEL,
+		fmt.Sprintf("Added %q as quote number %d.", quote, len(p.configuration.quotes))), nil
 }
 
 // DeleteQuote - Delete the specified quote.
@@ -338,38 +342,38 @@ func (p *QuotebotPlugin) ListQuotes(userID string) (*model.CommandResponse, *mod
 	return nil, p.NewError("Can't list.", "Only admins can list the quotes.", "ListQuotes")
 }
 
-// SetChannel - Set the channel the bot monitors.
-func (p *QuotebotPlugin) SetChannel(userID string, channel string, teamID string) (*model.CommandResponse, *model.AppError) {
-	if p.IsAdmin(userID) {
-		// This seems to always fail?
-		newChannel, err := p.API.GetChannelByName(channel, teamID, false) // What if the channel doesn't exist?
-		if err != nil {
-			return nil, p.NewError("Channel doesn't exist.", fmt.Sprintf("%q isn't a valid channel, use one that exists.", channel),
-				"SetChannel")
-		}
+// // SetChannel - Set the channel the bot monitors.
+// func (p *QuotebotPlugin) SetChannel(userID string, channel string, teamID string) (*model.CommandResponse, *model.AppError) {
+// 	if p.IsAdmin(userID) {
+// 		// This seems to always fail?
+// 		newChannel, err := p.API.GetChannelByName(channel, teamID, false) // What if the channel doesn't exist?
+// 		if err != nil {
+// 			return nil, p.NewError("Channel doesn't exist.", fmt.Sprintf("%q isn't a valid channel, use one that exists.", channel),
+// 				"SetChannel")
+// 		}
 
-		p.configuration.postChannel = newChannel.Id
-		return p.NewResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, fmt.Sprintf("Channel set to %s.", newChannel.DisplayName)), nil
-	}
+// 		p.configuration.postChannel = newChannel.Id
+// 		return p.NewResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, fmt.Sprintf("Channel set to %s.", newChannel.DisplayName)), nil
+// 	}
 
-	return nil, p.NewError("Can't set channel.", "Only admins can set the channel.", "SetChannel")
-}
+// 	return nil, p.NewError("Can't set channel.", "Only admins can set the channel.", "SetChannel")
+// }
 
-// SetInterval - Set the response interval, in minutes.
-func (p *QuotebotPlugin) SetInterval(userID string, interval int) (*model.CommandResponse, *model.AppError) {
-	if p.IsAdmin(userID) {
-		if interval < 15 {
-			return p.NewResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL,
-				"You can't set an Interval less than 15 minutes, it's annoying."), nil
-		}
+// // SetInterval - Set the response interval, in minutes.
+// func (p *QuotebotPlugin) SetInterval(userID string, interval int) (*model.CommandResponse, *model.AppError) {
+// 	if p.IsAdmin(userID) {
+// 		if interval < 15 {
+// 			return p.NewResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL,
+// 				"You can't set an Interval less than 15 minutes, it's annoying."), nil
+// 		}
 
-		p.configuration.postDelta = float64(interval)
-		return p.NewResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL,
-			fmt.Sprintf("Interval set to %v minutes.", p.configuration.postDelta)), nil
-	}
+// 		p.configuration.postDelta = float64(interval)
+// 		return p.NewResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL,
+// 			fmt.Sprintf("Interval set to %v minutes.", p.configuration.postDelta)), nil
+// 	}
 
-	return nil, p.NewError("Can't set interval.", "Only admins can set the interval.", "SetInterval")
-}
+// 	return nil, p.NewError("Can't set interval.", "Only admins can set the interval.", "SetInterval")
+// }
 
 // ShowHelp - Post the usage instructions.
 func (p *QuotebotPlugin) ShowHelp() (*model.CommandResponse, *model.AppError) {
