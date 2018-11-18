@@ -209,12 +209,12 @@ func TestExecuteCommand(t *testing.T) {
 	resp, err = runTestPluginCommand(t, "/quote 1")
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
-	assert.EqualValues(t, resp.Text, "Unable to show quote 1, it doesn't exist yet.")
+	assert.EqualValues(t, resp.Text, "There aren't any quotes yet.")
 
 	resp, err = runTestPluginCommand(t, "/quote add")
-	assert.Nil(t, resp)
-	assert.NotNil(t, err)
-	assert.EqualValues(t, err.Message, "Empty quote.")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.Text, "Empty quote. Try adding a quote with some text.")
 
 	resp, err = runTestPluginCommand(t, "/quote add some genius quote")
 	assert.NotNil(t, resp)
@@ -238,14 +238,14 @@ func TestExecuteCommand(t *testing.T) {
 	// assert.EqualValues(t, err.Message, "Can't set channel.")
 
 	resp, err = runTestPluginCommand(t, "/quote delete")
-	assert.Nil(t, resp)
-	assert.NotNil(t, err)
-	assert.EqualValues(t, err.Message, "What quote?")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.Text, "Only admins can delete quotes.")
 
 	resp, err = runTestPluginCommand(t, "/quote delete 1")
-	assert.Nil(t, resp)
-	assert.NotNil(t, err)
-	assert.EqualValues(t, err.Message, "Can't delete.")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.Text, "Only admins can delete quotes.")
 
 	// resp, err = runTestPluginCommand(t, "/quote interval")
 	// assert.Nil(t, resp)
@@ -258,9 +258,9 @@ func TestExecuteCommand(t *testing.T) {
 	// assert.EqualValues(t, err.Message, "Can't set interval.")
 
 	resp, err = runTestPluginCommand(t, "/quote list")
-	assert.Nil(t, resp)
-	assert.NotNil(t, err)
-	assert.EqualValues(t, err.Message, "Can't list.")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.Text, "Only admins can list the quotes.")
 }
 
 // TestExecuteCommandAdmin - Test the ExecuteCommand() triggers that require admin access.
@@ -278,14 +278,20 @@ func TestExecuteCommandAdmin(t *testing.T) {
 	// assert.EqualValues(t, resp.Text, "Set channel to ~town-square.")
 
 	resp, err := runTestPluginCommandAdmin(t, "/quote delete")
-	assert.Nil(t, resp)
-	assert.NotNil(t, err)
-	assert.EqualValues(t, err.Message, "What quote?")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.Text, "What quote? You have to specify a quote index.")
+
+	// TODO: Test this with a list of actual quotes.
+	resp, err = runTestPluginCommandAdmin(t, "/quote delete -1")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.Text, "You can't delete quote -1, it doesn't exist.")
 
 	resp, err = runTestPluginCommandAdmin(t, "/quote delete 1")
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
-	assert.EqualValues(t, resp.Text, "`DeleteQuote(1)`")
+	assert.EqualValues(t, resp.Text, "You can't delete quote 1, it doesn't exist.")
 
 	// resp, err = runTestPluginCommandAdmin(t, "/quote interval")
 	// assert.Nil(t, resp)
@@ -365,13 +371,63 @@ func TestNewError(t *testing.T) {
 // func TestPostRandom(t *testing.T) {
 // }
 
-// // TestShowQuote - Test the ShowQuote function.
-// func TestShowQuote(t *testing.T) {
-// }
+// TestShowQuote - Test the ShowQuote function.
+func TestShowQuote(t *testing.T) {
+	p := initTestPlugin(t, "normal")
+	assert.Nil(t, p.OnActivate())
+	assert.EqualValues(t, len(p.configuration.quotes), 0)
 
-// // TestShowRandom - Test the ShowRandom function.
-// func TestShowRandom(t *testing.T) {
-// }
+	resp, err := p.ShowQuote("foo") // "" calls ShowRandom() instead of ShowQuote().
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_EPHEMERAL)
+	assert.EqualValues(t, resp.Text, helpText)
+
+	resp, err = p.ShowQuote("1")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_EPHEMERAL)
+	assert.EqualValues(t, resp.Text, "There aren't any quotes yet.")
+
+	resp, err = p.AddQuote("quote 1")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+
+	resp, err = p.ShowQuote("1")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_IN_CHANNEL)
+	assert.EqualValues(t, resp.Text, "> quote 1")
+
+	resp, err = p.ShowQuote("2")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_EPHEMERAL)
+	assert.EqualValues(t, resp.Text, "Unable to show quote 2, it doesn't exist yet. There are 1 quotes on file.")
+}
+
+// TestShowRandom - Test the ShowRandom function.
+func TestShowRandom(t *testing.T) {
+	p := initTestPlugin(t, "normal")
+	assert.Nil(t, p.OnActivate())
+	assert.EqualValues(t, len(p.configuration.quotes), 0)
+
+	resp, err := p.ShowRandom()
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_EPHEMERAL)
+	assert.EqualValues(t, resp.Text, "There aren't any quotes yet.")
+
+	resp, err = p.AddQuote("quote 1")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+
+	resp, err = p.ShowRandom()
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_IN_CHANNEL)
+	assert.EqualValues(t, resp.Text, "> quote 1")
+}
 
 // TestShowHelp - Test the ShowHelp function.
 func TestShowHelp(t *testing.T) {
@@ -384,14 +440,105 @@ func TestShowHelp(t *testing.T) {
 	assert.EqualValues(t, resp.Text, helpText)
 }
 
-// // TestAddQuote - Test the AddQuote function.
-// func TestAddQuote(t *testing.T) {
-// }
+// TestAddQuote - Test the AddQuote function.
+func TestAddQuote(t *testing.T) {
+	p := initTestPlugin(t, "normal")
+	assert.Nil(t, p.OnActivate())
+	assert.EqualValues(t, len(p.configuration.quotes), 0)
 
-// // TestListQuotes - Test the ListQuotes function.
-// func TestListQuotes(t *testing.T) {
-// }
+	resp, err := p.AddQuote("")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_EPHEMERAL)
+	assert.EqualValues(t, resp.Text, "Empty quote. Try adding a quote with some text.")
+	assert.EqualValues(t, len(p.configuration.quotes), 0)
 
-// // TestDeleteQuote - Test the DeleteQuote function.
-// func TestDeleteQuote(t *testing.T) {
-// }
+	resp, err = p.AddQuote("quote 1")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_IN_CHANNEL)
+	assert.EqualValues(t, resp.Text, "Added \"quote 1\" as quote number 1.")
+	assert.EqualValues(t, len(p.configuration.quotes), 1)
+}
+
+// TestListQuotes - Test the ListQuotes function.
+func TestListQuotes(t *testing.T) {
+	// Regular user testing.
+	p := initTestPlugin(t, "normal")
+	assert.Nil(t, p.OnActivate())
+
+	resp, err := p.ListQuotes("userid")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_EPHEMERAL)
+	assert.EqualValues(t, resp.Text, "Only admins can list the quotes.")
+
+	// Admin testing.
+	p = initTestPlugin(t, "team")
+	assert.Nil(t, p.OnActivate())
+
+	resp, err = p.ListQuotes("userid")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_EPHEMERAL)
+	assert.EqualValues(t, resp.Text, "There are 0 quotes on file.")
+
+	resp, err = p.AddQuote("quote 1")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+
+	resp, err = p.ListQuotes("userid")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_EPHEMERAL)
+	assert.EqualValues(t, resp.Text, "There are 1 quotes on file.\n* 1 = \"quote 1\"")
+
+	resp, err = p.AddQuote("quote 2")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+
+	resp, err = p.ListQuotes("userid")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_EPHEMERAL)
+	assert.EqualValues(t, resp.Text, "There are 2 quotes on file.\n* 1 = \"quote 1\"\n* 2 = \"quote 2\"")
+}
+
+// TestDeleteQuote - Test the DeleteQuote function.
+func TestDeleteQuote(t *testing.T) {
+	// Regular user testing.
+	p := initTestPlugin(t, "normal")
+	assert.Nil(t, p.OnActivate())
+
+	resp, err := p.DeleteQuote("userid", "1")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_EPHEMERAL)
+	assert.EqualValues(t, resp.Text, "Only admins can delete quotes.")
+
+	// Admin testing.
+	p = initTestPlugin(t, "team")
+	assert.Nil(t, p.OnActivate())
+
+	resp, err = p.DeleteQuote("userid", "")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_EPHEMERAL)
+	assert.EqualValues(t, resp.Text, "What quote? You have to specify a quote index.")
+
+	resp, err = p.DeleteQuote("userid", "1")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_EPHEMERAL)
+	assert.EqualValues(t, resp.Text, "You can't delete quote 1, it doesn't exist.")
+
+	resp, err = p.AddQuote("quote 1")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+
+	resp, err = p.DeleteQuote("userid", "1")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_EPHEMERAL)
+	assert.EqualValues(t, resp.Text, "Deleted quote 1. There are 0 quotes on file.")
+}

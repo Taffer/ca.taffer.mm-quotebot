@@ -140,13 +140,7 @@ func (p *QuotebotPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandAr
 			// "/quote" - Show a random quote.
 			response, responseError = p.ShowRandom()
 		} else {
-			// If tail is a number, show that quote.
-			num, err := strconv.Atoi(tail)
-			if err == nil {
-				response, responseError = p.ShowQuote(num)
-			} else {
-				response, responseError = p.ShowHelp()
-			}
+			response, responseError = p.ShowQuote(tail)
 		}
 	} else {
 		switch strings.ToLower(strings.TrimSpace(command)) {
@@ -157,18 +151,13 @@ func (p *QuotebotPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandAr
 					fmt.Sprintf("User.Roles is: %q", user.Roles))
 				responseError = nil
 			} else {
-				response = nil
-				responseError = p.NewError("GetUser() fail.", "I have no idea.", "Debug")
+				response = p.NewResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, "GetUser() fail. I have no idea.")
+				responseError = nil
 			}
 
 		case "add":
 			// Anyone can add quotes.
-			if len(tail) > 0 {
-				response, responseError = p.AddQuote(tail)
-			} else {
-				response = nil
-				responseError = p.NewError("Empty quote.", "Try adding a quote with some text.", "ExecuteCommand")
-			}
+			response, responseError = p.AddQuote(tail)
 
 		// case "channel": // Admins only.
 		// 	// Tell the bot which channel to monitor.
@@ -182,13 +171,7 @@ func (p *QuotebotPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandAr
 
 		case "delete": // Admins only.
 			// Delete a quote specified by tail as a number.
-			num, err := strconv.Atoi(tail)
-			if err == nil {
-				response, responseError = p.DeleteQuote(args.UserId, num)
-			} else {
-				response = nil
-				responseError = p.NewError("What quote?", "You have to specify a quote index.", "ExecuteCommand")
-			}
+			response, responseError = p.DeleteQuote(args.UserId, tail)
 
 		case "help":
 			// Anyone can ask for help.
@@ -317,6 +300,10 @@ func (p *QuotebotPlugin) NewError(message string, details string, where string) 
 
 // AddQuote - Add the given quote to the quote database.
 func (p *QuotebotPlugin) AddQuote(quote string) (*model.CommandResponse, *model.AppError) {
+	if len(quote) < 1 {
+		return p.NewResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, "Empty quote. Try adding a quote with some text."), nil
+	}
+
 	// TODO: Should we search the list for "quote" before adding it?
 	p.configuration.quotes = append(p.configuration.quotes, quote)
 
@@ -325,12 +312,26 @@ func (p *QuotebotPlugin) AddQuote(quote string) (*model.CommandResponse, *model.
 }
 
 // DeleteQuote - Delete the specified quote.
-func (p *QuotebotPlugin) DeleteQuote(userID string, num int) (*model.CommandResponse, *model.AppError) {
+func (p *QuotebotPlugin) DeleteQuote(userID string, tail string) (*model.CommandResponse, *model.AppError) {
 	if p.IsAdmin(userID) {
-		return p.NewResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, fmt.Sprintf("`DeleteQuote(%v)`", num)), nil
+		num, err := strconv.Atoi(tail)
+		if err != nil {
+			return p.NewResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, "What quote? You have to specify a quote index."), nil
+		}
+
+		quoteIdx := num - 1 // The list is 1-based for humans.
+		if quoteIdx < 0 || len(p.configuration.quotes) == 0 || quoteIdx >= len(p.configuration.quotes) {
+			return p.NewResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL,
+				fmt.Sprintf("You can't delete quote %d, it doesn't exist.", num)), nil
+		}
+
+		p.configuration.quotes = append(p.configuration.quotes[:quoteIdx], p.configuration.quotes[quoteIdx+1:]...)
+
+		return p.NewResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL,
+			fmt.Sprintf("Deleted quote %d. There are %d quotes on file.", num, len(p.configuration.quotes))), nil
 	}
 
-	return nil, p.NewError("Can't delete.", "Only admins can delete quotes.", "DeleteQuote")
+	return p.NewResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, "Only admins can delete quotes."), nil
 }
 
 // ListQuotes - List the known quotes.
@@ -339,13 +340,14 @@ func (p *QuotebotPlugin) ListQuotes(userID string) (*model.CommandResponse, *mod
 		response := fmt.Sprintf("There are %d quotes on file.", len(p.configuration.quotes))
 
 		for idx := range p.configuration.quotes {
-			response += fmt.Sprintf("\n%d = %q", idx, p.configuration.quotes[idx])
+			// The list is 1-based for humans.
+			response += fmt.Sprintf("\n* %d = %q", idx+1, p.configuration.quotes[idx])
 		}
 
 		return p.NewResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, response), nil
 	}
 
-	return nil, p.NewError("Can't list.", "Only admins can list the quotes.", "ListQuotes")
+	return p.NewResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, "Only admins can list the quotes."), nil
 }
 
 // // SetChannel - Set the channel the bot monitors.
@@ -387,23 +389,34 @@ func (p *QuotebotPlugin) ShowHelp() (*model.CommandResponse, *model.AppError) {
 }
 
 // ShowQuote - Post the specified quote.
-func (p *QuotebotPlugin) ShowQuote(num int) (*model.CommandResponse, *model.AppError) {
-	if num == 0 {
+func (p *QuotebotPlugin) ShowQuote(tail string) (*model.CommandResponse, *model.AppError) {
+	// If tail is a number, show that quote.
+	num, err := strconv.Atoi(tail)
+	if err != nil {
+		return p.ShowHelp()
+	}
+
+	if len(p.configuration.quotes) == 0 {
 		return p.NewResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, "There aren't any quotes yet."), nil
 	} else if len(p.configuration.quotes) < num {
 		return p.NewResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL,
-			fmt.Sprintf("Unable to show quote %v, it doesn't exist yet.", num)), nil
+			fmt.Sprintf("Unable to show quote %v, it doesn't exist yet. There are %d quotes on file.", num,
+				len(p.configuration.quotes))), nil
 	}
 
-	return p.NewResponse(model.COMMAND_RESPONSE_TYPE_IN_CHANNEL, fmt.Sprintf("`ShowQuote(%v)`", num)), nil
+	return p.NewResponse(model.COMMAND_RESPONSE_TYPE_IN_CHANNEL, fmt.Sprintf("> %v", p.configuration.quotes[num-1])), nil
 }
 
 // ShowRandom - Show a random quotation in response to a command.
 func (p *QuotebotPlugin) ShowRandom() (*model.CommandResponse, *model.AppError) {
 	numQuotes := len(p.configuration.quotes)
+	if numQuotes == 1 {
+		return p.ShowQuote("1")
+	}
 	if numQuotes > 1 {
-		return p.ShowQuote(rand.Intn(numQuotes))
+		// rand.Intn() throws an exception if you call it with 0...
+		return p.ShowQuote(fmt.Sprintf("%d", rand.Intn(numQuotes)+1))
 	}
 
-	return p.ShowQuote(0)
+	return p.NewResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, "There aren't any quotes yet."), nil
 }
