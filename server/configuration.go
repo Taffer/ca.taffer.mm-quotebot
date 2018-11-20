@@ -18,8 +18,6 @@ import (
 type configuration struct {
 	postDelta   float64 // Minutes between posting random quotations.
 	postChannel string  // Channel to post random quotations to.
-
-	quotes []string // All of the quotes we know.
 }
 
 // Clone shallow copies the configuration. Your implementation may require a deep copy if
@@ -72,14 +70,15 @@ func (p *QuotebotPlugin) loadConfiguration(configuration *configuration) error {
 	return nil
 }
 
-func (p *QuotebotPlugin) saveConfiguration(configuration *configuration) error {
-	// Save the configuration.
-	if err := p.API.SavePluginConfiguration(configuration); err != nil {
-		return errors.Wrap(err, "Failed to save plugin configuration.")
-	}
+// This is coming in 5.6...
+// func (p *QuotebotPlugin) saveConfiguration(configuration *configuration) error {
+// 	// Save the configuration.
+// 	if err := p.API.SavePluginConfiguration(configuration); err != nil {
+// 		return errors.Wrap(err, "Failed to save plugin configuration.")
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
 
 // OnConfigurationChange is invoked when configuration changes may have been made.
 func (p *QuotebotPlugin) OnConfigurationChange() error {

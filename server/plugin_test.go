@@ -24,6 +24,7 @@ func runTestPluginCommand(t *testing.T, cmd string) (*model.CommandResponse, *mo
 	command = &model.CommandArgs{
 		Command: cmd,
 		UserId:  "userid",
+		TeamId:  "teamid",
 	}
 
 	return p.ExecuteCommand(&plugin.Context{}, command)
@@ -37,25 +38,24 @@ func runTestPluginCommandAdmin(t *testing.T, cmd string) (*model.CommandResponse
 	command = &model.CommandArgs{
 		Command: cmd,
 		UserId:  "userid",
+		TeamId:  "teamid",
 	}
 
 	return p.ExecuteCommand(&plugin.Context{}, command)
 }
 
-func initTestPlugin(t *testing.T, user string) *QuotebotPlugin {
+func initAPI(t *testing.T, user string) *plugintest.API {
 	api := &plugintest.API{}
+
+	// Things that don't change.
 	api.On("RegisterCommand", mock.Anything).Return(nil)
 	api.On("UnregisterCommand", mock.Anything, mock.Anything).Return(nil)
+	api.On("LoadPluginConfiguration", mock.Anything).Return(nil)
 
-	// I can't figure out how to mock this properly. Using this, I get:
-	//
-	// panic: assert: arguments: Cannot call Get(1) because there are 1 argument(s). [recovered]
-	//    panic: assert: arguments: Cannot call Get(1) because there are 1 argument(s).
-	//
-	// api.On("GetChannelByName", mock.Anything, mock.Anything, mock.Anything).Return(&model.Channel{
-	// 	Id:          "some ID string",
-	// 	DisplayName: "mock",
-	// })
+	api.On("GetChannelByName", mock.Anything, mock.Anything, mock.Anything).Return(&model.Channel{
+		Id:          "some ID string",
+		DisplayName: "mock",
+	}, (*model.AppError)(nil))
 
 	switch user {
 	case "channel": // Channel admin.
@@ -109,6 +109,14 @@ func initTestPlugin(t *testing.T, user string) *QuotebotPlugin {
 			Roles:     "system_user",
 		}, (*model.AppError)(nil))
 	}
+
+	return api
+}
+
+func initTestPlugin(t *testing.T, user string) *QuotebotPlugin {
+	api := initAPI(t, user)
+	api.On("KVGet", mock.Anything).Return(nil, nil)
+	api.On("KVSet", mock.Anything, mock.Anything).Return(nil)
 
 	p := QuotebotPlugin{}
 	p.SetAPI(api)
@@ -227,15 +235,15 @@ func TestExecuteCommand(t *testing.T) {
 	assert.EqualValues(t, resp.Text, helpText)
 
 	// Admin commands.
-	// resp, err = runTestPluginCommand(t, "/quote channel")
-	// assert.Nil(t, resp)
-	// assert.NotNil(t, err)
-	// assert.EqualValues(t, err.Message, "Empty channel.")
+	resp, err = runTestPluginCommand(t, "/quote channel")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.Text, "Only admins can set the channel.")
 
-	// resp, err = runTestPluginCommand(t, "/quote channel ~town-square")
-	// assert.Nil(t, resp)
-	// assert.NotNil(t, err)
-	// assert.EqualValues(t, err.Message, "Can't set channel.")
+	resp, err = runTestPluginCommand(t, "/quote channel ~town-square")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.Text, "Only admins can set the channel.")
 
 	resp, err = runTestPluginCommand(t, "/quote delete")
 	assert.NotNil(t, resp)
@@ -247,15 +255,15 @@ func TestExecuteCommand(t *testing.T) {
 	assert.Nil(t, err)
 	assert.EqualValues(t, resp.Text, "Only admins can delete quotes.")
 
-	// resp, err = runTestPluginCommand(t, "/quote interval")
-	// assert.Nil(t, resp)
-	// assert.NotNil(t, err)
-	// assert.EqualValues(t, err.Message, "Invalid interval.")
+	resp, err = runTestPluginCommand(t, "/quote interval")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.Text, "Only admins can set the interval.")
 
-	// resp, err = runTestPluginCommand(t, "/quote interval 1")
-	// assert.Nil(t, resp)
-	// assert.NotNil(t, err)
-	// assert.EqualValues(t, err.Message, "Can't set interval.")
+	resp, err = runTestPluginCommand(t, "/quote interval 1")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.Text, "Only admins can set the interval.")
 
 	resp, err = runTestPluginCommand(t, "/quote list")
 	assert.NotNil(t, resp)
@@ -265,19 +273,17 @@ func TestExecuteCommand(t *testing.T) {
 
 // TestExecuteCommandAdmin - Test the ExecuteCommand() triggers that require admin access.
 func TestExecuteCommandAdmin(t *testing.T) {
-	// I can't figure out how to mock GetChannelByName(), see initTestPlugin().
-	//
-	// resp, err := runTestPluginCommandAdmin(t, "/quote channel")
-	// assert.Nil(t, resp)
-	// assert.NotNil(t, err)
-	// assert.EqualValues(t, err.Message, "Empty channel.")
-	//
-	// resp, err = runTestPluginCommandAdmin(t, "/quote channel ~town-square")
-	// assert.NotNil(t, resp)
-	// assert.Nil(t, err)
-	// assert.EqualValues(t, resp.Text, "Set channel to ~town-square.")
+	resp, err := runTestPluginCommandAdmin(t, "/quote channel")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.Text, "You must specify a channel name.")
 
-	resp, err := runTestPluginCommandAdmin(t, "/quote delete")
+	resp, err = runTestPluginCommandAdmin(t, "/quote channel ~town-square")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.Text, "Channel set to mock.")
+
+	resp, err = runTestPluginCommandAdmin(t, "/quote delete")
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
 	assert.EqualValues(t, resp.Text, "What quote? You have to specify a quote index.")
@@ -293,20 +299,20 @@ func TestExecuteCommandAdmin(t *testing.T) {
 	assert.Nil(t, err)
 	assert.EqualValues(t, resp.Text, "You can't delete quote 1, it doesn't exist.")
 
-	// resp, err = runTestPluginCommandAdmin(t, "/quote interval")
-	// assert.Nil(t, resp)
-	// assert.NotNil(t, err)
-	// assert.EqualValues(t, err.Message, "Invalid interval.")
+	resp, err = runTestPluginCommandAdmin(t, "/quote interval")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.Text, "You have to specify an interval in minutes, >= 15.")
 
-	// resp, err = runTestPluginCommandAdmin(t, "/quote interval 1")
-	// assert.NotNil(t, resp)
-	// assert.Nil(t, err)
-	// assert.EqualValues(t, resp.Text, "You can't set an Interval less than 15 minutes, it's annoying.")
+	resp, err = runTestPluginCommandAdmin(t, "/quote interval 1")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.Text, "You can't set an Interval less than 15 minutes, it's annoying.")
 
-	// resp, err = runTestPluginCommandAdmin(t, "/quote interval 120")
-	// assert.NotNil(t, resp)
-	// assert.Nil(t, err)
-	// assert.EqualValues(t, resp.Text, "Interval set to 120 minutes.")
+	resp, err = runTestPluginCommandAdmin(t, "/quote interval 120")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.Text, "Interval set to 120 minutes.")
 
 	resp, err = runTestPluginCommandAdmin(t, "/quote list")
 	assert.NotNil(t, resp)
@@ -348,6 +354,21 @@ func TestIsAdmin(t *testing.T) {
 	assert.True(t, p.IsAdmin("userid"))
 }
 
+// TestLoadQuotes - Test the LoadQuotes function.
+func TestLoadQuotes(t *testing.T) {
+	p := initTestPlugin(t, "normal")
+	err := p.LoadQuotes()
+	assert.Nil(t, err)
+	assert.EqualValues(t, len(p.quotes), 0)
+
+	api := initAPI(t, "normal")
+	api.On("KVGet", mock.Anything).Return([]byte(`["quote 1", "quote 2"]`), nil)
+	p.SetAPI(api)
+	err = p.LoadQuotes()
+	assert.Nil(t, err)
+	assert.EqualValues(t, len(p.quotes), 2)
+}
+
 // TestNewResponse - Test the NewResponse function.
 func TestNewResponse(t *testing.T) {
 	p := initTestPlugin(t, "normal")
@@ -371,11 +392,20 @@ func TestNewError(t *testing.T) {
 // func TestPostRandom(t *testing.T) {
 // }
 
+// TestSaveQuotes - Test the SaveQuotes function.
+// This test is weak. Not sure how to mock this to test it in a useful way,
+// it's a fairly trivial function...
+func TestSaveQuotes(t *testing.T) {
+	p := initTestPlugin(t, "normal")
+	assert.Nil(t, p.OnActivate())
+	assert.EqualValues(t, len(p.quotes), 0)
+}
+
 // TestShowQuote - Test the ShowQuote function.
 func TestShowQuote(t *testing.T) {
 	p := initTestPlugin(t, "normal")
 	assert.Nil(t, p.OnActivate())
-	assert.EqualValues(t, len(p.configuration.quotes), 0)
+	assert.EqualValues(t, len(p.quotes), 0)
 
 	resp, err := p.ShowQuote("foo") // "" calls ShowRandom() instead of ShowQuote().
 	assert.NotNil(t, resp)
@@ -410,7 +440,7 @@ func TestShowQuote(t *testing.T) {
 func TestShowRandom(t *testing.T) {
 	p := initTestPlugin(t, "normal")
 	assert.Nil(t, p.OnActivate())
-	assert.EqualValues(t, len(p.configuration.quotes), 0)
+	assert.EqualValues(t, len(p.quotes), 0)
 
 	resp, err := p.ShowRandom()
 	assert.NotNil(t, resp)
@@ -444,21 +474,21 @@ func TestShowHelp(t *testing.T) {
 func TestAddQuote(t *testing.T) {
 	p := initTestPlugin(t, "normal")
 	assert.Nil(t, p.OnActivate())
-	assert.EqualValues(t, len(p.configuration.quotes), 0)
+	assert.EqualValues(t, len(p.quotes), 0)
 
 	resp, err := p.AddQuote("")
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
 	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_EPHEMERAL)
 	assert.EqualValues(t, resp.Text, "Empty quote. Try adding a quote with some text.")
-	assert.EqualValues(t, len(p.configuration.quotes), 0)
+	assert.EqualValues(t, len(p.quotes), 0)
 
 	resp, err = p.AddQuote("quote 1")
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
 	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_IN_CHANNEL)
 	assert.EqualValues(t, resp.Text, "Added \"quote 1\" as quote number 1.")
-	assert.EqualValues(t, len(p.configuration.quotes), 1)
+	assert.EqualValues(t, len(p.quotes), 1)
 }
 
 // TestListQuotes - Test the ListQuotes function.
