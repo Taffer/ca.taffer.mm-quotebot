@@ -111,6 +111,7 @@ func (p *QuotebotPlugin) OnActivate() error {
 	}
 	if configuration.postChannel == "" {
 		configuration.postChannel = "town-square"
+		// Need a Team ID to get the channel ID.
 	}
 
 	p.setConfiguration(configuration)
@@ -149,12 +150,6 @@ func (p *QuotebotPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandAr
 		// It's not for us.
 		return nil, nil
 	}
-
-	// If we don't have a channel ID set, get it now.
-	// channel, channelErr := p.API.GetChannelByName(args.TeamId, p.configuration.postChannel, false) // What if the channel doesn't exist?
-	// if channelErr != nil {
-	// 	p.channelID = channel.Id
-	// }
 
 	// Dig out the command and tail.
 	matches := FindNamedSubstrings(p.commandPattern, args.Command)
@@ -342,6 +337,7 @@ func (p *QuotebotPlugin) PostRandom() {
 	switch len(p.quotes) {
 	case 0:
 		// something zen
+		quote = "There is no void if you don't try to fill it. -- Marty Rubin"
 	case 1:
 		// rand.Intn() throws an exception if you call it with 0.
 		quote = p.quotes[0]
@@ -352,6 +348,7 @@ func (p *QuotebotPlugin) PostRandom() {
 	post, err := p.API.CreatePost(&model.Post{
 		ChannelId: p.channelID,
 		Message:   quote,
+		UserId:    nil, // TODO: Where do I get this?!
 	})
 	if post == nil {
 		p.API.LogError("PostRandom() - post came back nil.")
