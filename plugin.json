@@ -2,7 +2,7 @@
     "id": "ca.taffer.mm-quotebot",
     "name": "Quotebot",
     "description": "Remember quotations and spit them out on command.",
-    "version": "0.0.1",
+    "version": "0.3",
     "server": {
         "executables": {
             "linux-amd64": "server/dist/plugin-linux-amd64",

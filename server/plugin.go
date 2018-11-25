@@ -27,7 +27,7 @@ type QuotebotPlugin struct {
 
 	active    bool      // Is the plugin currently active?
 	lastPost  time.Time // When did we last post a random quotation?
-	channelID string    // The Channel ID of the channel we randomly post to.
+	channelID string    // The Channel ID of the channel we randomly post to (p.configuration.postChannel).
 	quotes    []string  // The list of quotes we know about.
 
 	commandPattern *regexp.Regexp
@@ -47,25 +47,28 @@ const (
 	slashTrigger string = "/" + trigger
 	pluginName   string = "Quotebot"
 
-	// ^/quote\s*(?P<command>(add|channel|delete|interval|list)\s*)?(?P<tail>.*)\s*$
+	// ^/quote\s*(?P<command>(add|channel|delete|info|interval|list)\s*)?(?P<tail>.*)\s*$
 	// TODO: Remove "debug" when we're done with it.
-	// TODO: Add "channel" and "interval" back later.
-	commandRegex string = `(?i)^` + slashTrigger + `\s*(?P<command>(debug|add|channel|delete|interval|list)\s*)?(?P<tail>.*)\s*$`
+	commandRegex string = `(?i)^` + slashTrigger + `\s*(?P<command>(debug|add|channel|delete|info|interval|list)\s*)?(?P<tail>.*)\s*$`
 
 	// I still haven't looked into i18n.
-	// TODO: Add "channel" and "interval" (and the posting blurb) back later.
 	helpText = `Quotebot remembers quotes you tell it about, and spits them out again when you ask it to.
 
 Commands:
 
 * /quote - Regurgitate a random quote.
 * /quote *x* - Show quote number *x*.
-* /quote add *genius quote* - Store *genius quote* for later. Don't forget to include an attribution!
+* /quote add *genius quote* - Store *genius quote* for later. Don't forget to
+  include an attribution!
 * /quote help - Show the help.
+* /quote info - Show the number of quotes, the channel, and the interval.`
+	adminHelpText = `Admin commands:
 
-Admin commands:
-
+* /quote channel *x* - Monitor channel *x* for activity and randomly
+  show quotes there.
 * /quote delete *x* - Delete quote number *x*.
+* /quote interval *x* - The time between automatically posting quotes
+  in a channel.
 * /quote list - List all known quotes.`
 )
 
@@ -101,6 +104,15 @@ func (p *QuotebotPlugin) OnActivate() error {
 	if err != nil {
 		return err
 	}
+
+	// Defaults.
+	if configuration.postDelta == 0 {
+		configuration.postDelta = 15
+	}
+	if configuration.postChannel == "" {
+		configuration.postChannel = "town-square"
+	}
+
 	p.setConfiguration(configuration)
 
 	p.commandPattern = regexp.MustCompile(commandRegex)
@@ -138,6 +150,12 @@ func (p *QuotebotPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandAr
 		return nil, nil
 	}
 
+	// If we don't have a channel ID set, get it now.
+	// channel, channelErr := p.API.GetChannelByName(args.TeamId, p.configuration.postChannel, false) // What if the channel doesn't exist?
+	// if channelErr != nil {
+	// 	p.channelID = channel.Id
+	// }
+
 	// Dig out the command and tail.
 	matches := FindNamedSubstrings(p.commandPattern, args.Command)
 	command := matches["command"]
@@ -149,22 +167,16 @@ func (p *QuotebotPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandAr
 	if command == "" {
 		if tail == "" {
 			// "/quote" - Show a random quote.
-			response, responseError = p.ShowRandom()
+			response, responseError = p.ShowRandom(args.UserId)
 		} else {
-			response, responseError = p.ShowQuote(tail)
+			response, responseError = p.ShowQuote(args.UserId, tail)
 		}
 	} else {
 		switch strings.ToLower(strings.TrimSpace(command)) {
 		case "debug": // TODO: DELETE ME WHEN DONE.
-			user, err := p.API.GetUser(args.UserId)
-			if err == nil {
-				response = p.NewResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL,
-					fmt.Sprintf("User.Roles is: %q", user.Roles))
-				responseError = nil
-			} else {
-				response = p.NewResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, "GetUser() fail. I have no idea.")
-				responseError = nil
-			}
+			p.PostRandom()
+			response = p.NewResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, "PostRandom() is done.")
+			responseError = nil
 
 		case "add":
 			// Anyone can add quotes.
@@ -180,7 +192,11 @@ func (p *QuotebotPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandAr
 
 		case "help":
 			// Anyone can ask for help.
-			response, responseError = p.ShowHelp()
+			response, responseError = p.ShowHelp(args.UserId)
+
+		case "info":
+			// Anyone can ask for the info.
+			response, responseError = p.ShowInfo(args.UserId)
 
 		case "interval": // Admins only.
 			// Change the posting interval, in minutes.
@@ -195,39 +211,48 @@ func (p *QuotebotPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandAr
 	return response, responseError
 }
 
-// // MessageHasBeenPosted - can use this to periodically post a quote if people are talking...
-// func (p *QuotebotPlugin) MessageHasBeenPosted(c *plugin.Context, post *model.Post) {
-// 	if p.active == false { // Is this even possible?
-// 		return
-// 	}
+// MessageHasBeenPosted - can use this to periodically post a quote if people are talking...
+func (p *QuotebotPlugin) MessageHasBeenPosted(c *plugin.Context, post *model.Post) {
+	if p.active == false { // Is this even possible?
+		return
+	}
 
-// 	// TODO: Ignore messages from bots.
-// 	if post.ChannelId == p.channelID {
-// 		p.PostRandom()
-// 	}
-// }
+	// TODO: How to ignore posts from bots?
+	if post.ChannelId != p.channelID { // Ignore posts in other channels.
+		return
+	}
 
-// // UserHasJoinedChannel - another trigger for periodically posting
-// func (p *QuotebotPlugin) UserHasJoinedChannel(c *plugin.Context, channelMember *model.ChannelMember, actor *model.User) {
-// 	if p.active == false { // Is this even possible?
-// 		return
-// 	}
+	// Post a random quote, maybe.
+	p.PostRandom()
+}
 
-// 	if channelMember.ChannelId == p.channelID {
-// 		p.PostRandom()
-// 	}
-// }
+// UserHasJoinedChannel - another trigger for periodically posting
+func (p *QuotebotPlugin) UserHasJoinedChannel(c *plugin.Context, channelMember *model.ChannelMember, actor *model.User) {
+	if p.active == false { // Is this even possible?
+		return
+	}
 
-// // UserHasLeftChannel - another trigger for periodically posting
-// func (p *QuotebotPlugin) UserHasLeftChannel(c *plugin.Context, channelMember *model.ChannelMember, actor *model.User) {
-// 	if p.active == false { // Is this even possible?
-// 		return
-// 	}
+	if channelMember.ChannelId != p.channelID { // Ignore posts in other channels.
+		return
+	}
 
-// 	if channelMember.ChannelId == p.channelID {
-// 		p.PostRandom()
-// 	}
-// }
+	// Post a random quote, maybe.
+	p.PostRandom()
+}
+
+// UserHasLeftChannel - another trigger for periodically posting
+func (p *QuotebotPlugin) UserHasLeftChannel(c *plugin.Context, channelMember *model.ChannelMember, actor *model.User) {
+	if p.active == false { // Is this even possible?
+		return
+	}
+
+	if channelMember.ChannelId != p.channelID { // Ignore posts in other channels.
+		return
+	}
+
+	// Post a random quote, maybe.
+	p.PostRandom()
+}
 
 // -----------------------------------------------------------------------------
 // Quotebot functions
@@ -302,18 +327,39 @@ func (p *QuotebotPlugin) NewError(message string, details string, where string) 
 	}
 }
 
-// // PostRandom - Post a random quotation if enough time has passed.
-// func (p *QuotebotPlugin) PostRandom() {
-// 	now := time.Now()
-// 	delta := now.Sub(p.lastPost)
+// PostRandom - Post a random quotation if enough time has passed.
+func (p *QuotebotPlugin) PostRandom() {
+	now := time.Now()
+	delta := now.Sub(p.lastPost)
 
-// 	if delta.Minutes() > p.configuration.postDelta {
-// 		p.lastPost = now
+	if delta.Minutes() < p.configuration.postDelta {
+		return
+	}
 
-// 		// TODO: post a random quote to p.configuration.postChannel.
-// 		// p.channelID is the Channel ID of p.configuration.postChannel.
-// 	}
-// }
+	p.lastPost = now
+
+	var quote string
+	switch len(p.quotes) {
+	case 0:
+		// something zen
+	case 1:
+		// rand.Intn() throws an exception if you call it with 0.
+		quote = p.quotes[0]
+	default:
+		quote = p.quotes[rand.Intn(len(p.quotes))+1]
+	}
+
+	post, err := p.API.CreatePost(&model.Post{
+		ChannelId: p.channelID,
+		Message:   quote,
+	})
+	if post == nil {
+		p.API.LogError("PostRandom() - post came back nil.")
+	}
+	if err != nil {
+		p.API.LogError("PostRandom() - error: %q", err)
+	}
+}
 
 // SaveQuotes - Load the quote list from the key-value store.
 func (p *QuotebotPlugin) SaveQuotes() *model.AppError {
@@ -395,17 +441,22 @@ func (p *QuotebotPlugin) SetChannel(userID string, channel string, teamID string
 		return p.NewResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, "Only admins can set the channel."), nil
 	}
 
-	if len(channel) == 0 {
+	if len(channel) == 0 || channel == "~" {
 		return p.NewResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, "You must specify a channel name."), nil
 	}
 
-	newChannel, err := p.API.GetChannelByName(channel, teamID, false) // What if the channel doesn't exist?
+	if channel[0:1] == "~" {
+		channel = channel[1:]
+	}
+
+	newChannel, err := p.API.GetChannelByName(teamID, channel, false) // What if the channel doesn't exist?
 	if err != nil {
 		return p.NewResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL,
 			fmt.Sprintf("%q isn't a valid channel, use one that exists.", channel)), nil
 	}
 
-	p.configuration.postChannel = newChannel.Id
+	p.configuration.postChannel = newChannel.DisplayName
+	p.channelID = newChannel.Id
 	return p.NewResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, fmt.Sprintf("Channel set to %s.", newChannel.DisplayName)), nil
 }
 
@@ -425,6 +476,10 @@ func (p *QuotebotPlugin) SetInterval(userID string, tail string) (*model.Command
 		return p.NewResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL,
 			"You can't set an Interval less than 15 minutes, it's annoying."), nil
 	}
+	if interval > 10080 { // It's been... one week...
+		return p.NewResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL,
+			"You can't set the Interval to more than a week, that's excessive."), nil
+	}
 
 	p.configuration.postDelta = float64(interval)
 	return p.NewResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL,
@@ -432,16 +487,42 @@ func (p *QuotebotPlugin) SetInterval(userID string, tail string) (*model.Command
 }
 
 // ShowHelp - Post the usage instructions.
-func (p *QuotebotPlugin) ShowHelp() (*model.CommandResponse, *model.AppError) {
+func (p *QuotebotPlugin) ShowHelp(userID string) (*model.CommandResponse, *model.AppError) {
+	if p.IsAdmin(userID) {
+		return p.NewResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, strings.Join([]string{helpText, adminHelpText}, "\n\n")), nil
+	}
+
 	return p.NewResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, helpText), nil
 }
 
+// ShowInfo - Show plug info.
+// This function is an i18n nightmare, but at least it's short...
+func (p *QuotebotPlugin) ShowInfo(userID string) (*model.CommandResponse, *model.AppError) {
+	info := "You are a"
+	if p.IsAdmin(userID) {
+		info += "n Admin."
+	} else {
+		info += " User."
+	}
+
+	info += fmt.Sprintf(" Quotebot knows %v quotes.", len(p.quotes))
+
+	channel, err := p.API.GetChannel(p.channelID)
+	if err == nil {
+		info += fmt.Sprintf(" Monitoring %s for activity every %v minutes.", channel.DisplayName, p.configuration.postDelta)
+	} else {
+		info += fmt.Sprintf(" Monitoring a non-existent channel. An Admin should fix that.")
+	}
+
+	return p.NewResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, info), nil
+}
+
 // ShowQuote - Post the specified quote.
-func (p *QuotebotPlugin) ShowQuote(tail string) (*model.CommandResponse, *model.AppError) {
+func (p *QuotebotPlugin) ShowQuote(userID string, tail string) (*model.CommandResponse, *model.AppError) {
 	// If tail is a number, show that quote.
 	num, err := strconv.Atoi(tail)
 	if err != nil {
-		return p.ShowHelp()
+		return p.ShowHelp(userID)
 	}
 
 	if len(p.quotes) == 0 {
@@ -456,14 +537,14 @@ func (p *QuotebotPlugin) ShowQuote(tail string) (*model.CommandResponse, *model.
 }
 
 // ShowRandom - Show a random quotation in response to a command.
-func (p *QuotebotPlugin) ShowRandom() (*model.CommandResponse, *model.AppError) {
+func (p *QuotebotPlugin) ShowRandom(userID string) (*model.CommandResponse, *model.AppError) {
 	numQuotes := len(p.quotes)
 	if numQuotes == 1 {
-		return p.ShowQuote("1")
+		return p.ShowQuote(userID, "1")
 	}
 	if numQuotes > 1 {
 		// rand.Intn() throws an exception if you call it with 0...
-		return p.ShowQuote(fmt.Sprintf("%d", rand.Intn(numQuotes)+1))
+		return p.ShowQuote(userID, fmt.Sprintf("%d", rand.Intn(numQuotes)+1))
 	}
 
 	return p.NewResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, "There aren't any quotes yet."), nil

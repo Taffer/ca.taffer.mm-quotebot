@@ -5,5 +5,5 @@ var manifest = struct {
 	Version string
 }{
 	Id:      "ca.taffer.mm-quotebot",
-	Version: "0.0.1",
+	Version: "0.3",
 }

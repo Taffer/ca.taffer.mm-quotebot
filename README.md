@@ -21,13 +21,14 @@ Commands:
 * /quote add *genius quote* - Store *genius quote* for later. Don't forget to
   include an attribution!
 * /quote help - Show the help.
+* /quote info - Show the number of quotes, the channel, and the interval.
 
 Admin commands:
 
-* **TODO** /quote channel *x* - Monitor channel *x* for activity and randomly
+* /quote channel *x* - Monitor channel *x* for activity and randomly
   show quotes there.
 * /quote delete *x* - Delete quote number *x*.
-* **TODO** /quote interval *x* - The time between automatically posting quotes
+* /quote interval *x* - The time between automatically posting quotes
   in a channel.
 * /quote list - List all known quotes.
 
@@ -57,6 +58,26 @@ The responses would have their own channel separate from the quotes, and a 1/*x*
 chance of responding to a matched trigger so it doesn't get annoying.
 
 > It's like _Speed_ but more stupid. -- @chris
+
+## Privacy
+
+When Quotebot is monitoring a channel, it's just looking for activity.
+Specifically, it looks for:
+
+* Messages being posted (but it ignores bots).
+* Users joining the channel.
+* Users leaving the channel.
+
+Quotebot entirely ignores _what's happening_ and only pays attention to the
+fact that _something happened_. None of the events are logged or stored in
+any way.
+
+To see exactly what Quotebot is doing while monitoring, look at these
+functions in `server/plugin.go`:
+
+* `MessageHasBeenPosted()`
+* `UserHasJoinedChannel()`
+* `UserHasLeftChannel()`
 
 ## Credits
 

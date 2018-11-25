@@ -16,107 +16,97 @@ import (
 // Test support utilities
 // -----------------------------------------------------------------------------
 
-func runTestPluginCommand(t *testing.T, cmd string) (*model.CommandResponse, *model.AppError) {
-	p := initTestPlugin(t, "normal")
-	assert.Nil(t, p.OnActivate())
-
-	var command *model.CommandArgs
-	command = &model.CommandArgs{
-		Command: cmd,
-		UserId:  "userid",
-		TeamId:  "teamid",
+func testUser(user string) *model.User {
+	fakeUser := &model.User{
+		Id:        "userid",
+		Nickname:  user,
+		Username:  "Someone",
+		FirstName: user,
+		LastName:  "User",
+		Roles:     "",
 	}
-
-	return p.ExecuteCommand(&plugin.Context{}, command)
-}
-
-func runTestPluginCommandAdmin(t *testing.T, cmd string) (*model.CommandResponse, *model.AppError) {
-	p := initTestPlugin(t, "system")
-	assert.Nil(t, p.OnActivate())
-
-	var command *model.CommandArgs
-	command = &model.CommandArgs{
-		Command: cmd,
-		UserId:  "userid",
-		TeamId:  "teamid",
-	}
-
-	return p.ExecuteCommand(&plugin.Context{}, command)
-}
-
-func initAPI(t *testing.T, user string) *plugintest.API {
-	api := &plugintest.API{}
-
-	// Things that don't change.
-	api.On("RegisterCommand", mock.Anything).Return(nil)
-	api.On("UnregisterCommand", mock.Anything, mock.Anything).Return(nil)
-	api.On("LoadPluginConfiguration", mock.Anything).Return(nil)
-
-	api.On("GetChannelByName", mock.Anything, mock.Anything, mock.Anything).Return(&model.Channel{
-		Id:          "some ID string",
-		DisplayName: "mock",
-	}, (*model.AppError)(nil))
 
 	switch user {
 	case "channel": // Channel admin.
-		api.On("GetUser", mock.Anything).Return(&model.User{
-			Id:        "userid",
-			Nickname:  "User",
-			Username:  "hunter2",
-			FirstName: "User",
-			LastName:  "McUserface",
-			Roles:     strings.Join([]string{"system_user", model.PERMISSIONS_CHANNEL_ADMIN}, " "),
-		}, (*model.AppError)(nil))
+		fakeUser.Roles = strings.Join([]string{"system_user", model.PERMISSIONS_CHANNEL_ADMIN}, " ")
 
 	case "team": // Team admin.
-		api.On("GetUser", mock.Anything).Return(&model.User{
-			Id:        "userid",
-			Nickname:  "User",
-			Username:  "hunter2",
-			FirstName: "User",
-			LastName:  "McUserface",
-			Roles:     strings.Join([]string{"system_user", model.PERMISSIONS_TEAM_ADMIN}, " "),
-		}, (*model.AppError)(nil))
+		fakeUser.Roles = strings.Join([]string{"system_user", model.PERMISSIONS_TEAM_ADMIN}, " ")
 
 	case "system": // System admin.
-		api.On("GetUser", mock.Anything).Return(&model.User{
-			Id:        "userid",
-			Nickname:  "User",
-			Username:  "hunter2",
-			FirstName: "User",
-			LastName:  "McUserface",
-			Roles:     strings.Join([]string{"system_user", model.PERMISSIONS_SYSTEM_ADMIN}, " "),
-		}, (*model.AppError)(nil))
+		fakeUser.Roles = strings.Join([]string{"system_user", model.PERMISSIONS_SYSTEM_ADMIN}, " ")
 
 	case "everything": // Overkill!
-		api.On("GetUser", mock.Anything).Return(&model.User{
-			Id:        "userid",
-			Nickname:  "User",
-			Username:  "hunter2",
-			FirstName: "User",
-			LastName:  "McUserface",
-			Roles: strings.Join([]string{"system_user", model.PERMISSIONS_CHANNEL_ADMIN, model.PERMISSIONS_TEAM_ADMIN,
-				model.PERMISSIONS_SYSTEM_ADMIN}, " "),
-		}, (*model.AppError)(nil))
+		fakeUser.Roles = strings.Join([]string{"system_user", model.PERMISSIONS_CHANNEL_ADMIN, model.PERMISSIONS_TEAM_ADMIN,
+			model.PERMISSIONS_SYSTEM_ADMIN}, " ")
 
 	default:
-		api.On("GetUser", mock.Anything).Return(&model.User{
-			Id:        "userid",
-			Nickname:  "User",
-			Username:  "hunter2",
-			FirstName: "User",
-			LastName:  "McUserface",
-			Roles:     "system_user",
-		}, (*model.AppError)(nil))
+		fakeUser.Roles = "system_user"
 	}
+
+	return fakeUser
+}
+
+func testChannel(channelID string) (*model.Channel, *model.AppError) {
+	var fakeChannel *model.Channel
+	var fakeErr *model.AppError
+
+	switch channelID {
+	case "fail":
+		fakeChannel = nil
+		fakeErr = &model.AppError{
+			Message:       "Nope.",
+			DetailedError: "Nope.",
+			Where:         "QuotebotPlugin.Nope.",
+		}
+
+	default:
+		fakeChannel = &model.Channel{
+			Id:          "some ID string",
+			DisplayName: "mock",
+		}
+		fakeErr = nil
+	}
+
+	return fakeChannel, fakeErr
+}
+
+func runTestPluginCommand(t *testing.T, cmd string, user string, channelID string) (*model.CommandResponse, *model.AppError) {
+	p := initTestPlugin(t, user, channelID)
+	assert.Nil(t, p.OnActivate())
+
+	var command *model.CommandArgs
+	command = &model.CommandArgs{
+		Command: cmd,
+		UserId:  "userid",
+		TeamId:  "teamid",
+	}
+
+	return p.ExecuteCommand(&plugin.Context{}, command)
+}
+
+func initAPI(t *testing.T, user string, channelID string, quotesRaw []byte) *plugintest.API {
+	api := &plugintest.API{}
+	fakeUser := testUser(user)
+	fakeChannel, fakeChannelErr := testChannel(channelID)
+
+	// Things that don't change depending on user/channelID.
+	api.On("RegisterCommand", mock.Anything).Return(nil)
+	api.On("UnregisterCommand", mock.Anything, mock.Anything).Return(nil)
+	api.On("LoadPluginConfiguration", mock.Anything).Return(nil)
+	api.On("KVGet", mock.Anything).Return(quotesRaw, nil)
+	api.On("KVSet", mock.Anything, mock.Anything).Return(nil)
+
+	// These need specific mocks.
+	api.On("GetUser", mock.Anything).Return(fakeUser, (*model.AppError)(nil))
+	api.On("GetChannelByName", mock.Anything, mock.Anything, mock.Anything).Return(fakeChannel, fakeChannelErr)
+	api.On("GetChannel", mock.Anything).Return(fakeChannel, fakeChannelErr)
 
 	return api
 }
 
-func initTestPlugin(t *testing.T, user string) *QuotebotPlugin {
-	api := initAPI(t, user)
-	api.On("KVGet", mock.Anything).Return(nil, nil)
-	api.On("KVSet", mock.Anything, mock.Anything).Return(nil)
+func initTestPlugin(t *testing.T, user string, channelID string) *QuotebotPlugin {
+	api := initAPI(t, user, channelID, nil)
 
 	p := QuotebotPlugin{}
 	p.SetAPI(api)
@@ -183,7 +173,7 @@ func TestFindNamedSubstrings(t *testing.T) {
 
 // TestOnActivate - Test the OnActivate callback.
 func TestOnActivate(t *testing.T) {
-	p := initTestPlugin(t, "normal")
+	p := initTestPlugin(t, "normal", "mock")
 
 	assert.False(t, p.active)
 	p.OnActivate()
@@ -192,7 +182,7 @@ func TestOnActivate(t *testing.T) {
 
 // TestOnDeactivate - Test the OnDeactivate callback.
 func TestOnDeactivate(t *testing.T) {
-	p := initTestPlugin(t, "normal")
+	p := initTestPlugin(t, "normal", "mock")
 
 	assert.False(t, p.active)
 	p.OnActivate()
@@ -204,68 +194,68 @@ func TestOnDeactivate(t *testing.T) {
 // TestExecuteCommand - Test the ExecuteCommand callback.
 func TestExecuteCommand(t *testing.T) {
 	// Normal user commands.
-	resp, err := runTestPluginCommand(t, "/quote")
+	resp, err := runTestPluginCommand(t, "/quote", "user", "mock")
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
 	assert.EqualValues(t, resp.Text, "There aren't any quotes yet.")
 
-	resp, err = runTestPluginCommand(t, "/quote ")
+	resp, err = runTestPluginCommand(t, "/quote ", "user", "mock")
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
 	assert.EqualValues(t, resp.Text, "There aren't any quotes yet.")
 
-	resp, err = runTestPluginCommand(t, "/quote 1")
+	resp, err = runTestPluginCommand(t, "/quote 1", "user", "mock")
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
 	assert.EqualValues(t, resp.Text, "There aren't any quotes yet.")
 
-	resp, err = runTestPluginCommand(t, "/quote add")
+	resp, err = runTestPluginCommand(t, "/quote add", "user", "mock")
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
 	assert.EqualValues(t, resp.Text, "Empty quote. Try adding a quote with some text.")
 
-	resp, err = runTestPluginCommand(t, "/quote add some genius quote")
+	resp, err = runTestPluginCommand(t, "/quote add some genius quote", "user", "mock")
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
 	assert.EqualValues(t, resp.Text, "Added \"some genius quote\" as quote number 1.")
 
-	resp, err = runTestPluginCommand(t, "/quote help")
+	resp, err = runTestPluginCommand(t, "/quote help", "user", "mock")
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
 	assert.EqualValues(t, resp.Text, helpText)
 
 	// Admin commands.
-	resp, err = runTestPluginCommand(t, "/quote channel")
+	resp, err = runTestPluginCommand(t, "/quote channel", "user", "mock")
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
 	assert.EqualValues(t, resp.Text, "Only admins can set the channel.")
 
-	resp, err = runTestPluginCommand(t, "/quote channel ~town-square")
+	resp, err = runTestPluginCommand(t, "/quote channel ~town-square", "user", "mock")
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
 	assert.EqualValues(t, resp.Text, "Only admins can set the channel.")
 
-	resp, err = runTestPluginCommand(t, "/quote delete")
+	resp, err = runTestPluginCommand(t, "/quote delete", "user", "mock")
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
 	assert.EqualValues(t, resp.Text, "Only admins can delete quotes.")
 
-	resp, err = runTestPluginCommand(t, "/quote delete 1")
+	resp, err = runTestPluginCommand(t, "/quote delete 1", "user", "mock")
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
 	assert.EqualValues(t, resp.Text, "Only admins can delete quotes.")
 
-	resp, err = runTestPluginCommand(t, "/quote interval")
+	resp, err = runTestPluginCommand(t, "/quote interval", "user", "mock")
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
 	assert.EqualValues(t, resp.Text, "Only admins can set the interval.")
 
-	resp, err = runTestPluginCommand(t, "/quote interval 1")
+	resp, err = runTestPluginCommand(t, "/quote interval 1", "user", "mock")
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
 	assert.EqualValues(t, resp.Text, "Only admins can set the interval.")
 
-	resp, err = runTestPluginCommand(t, "/quote list")
+	resp, err = runTestPluginCommand(t, "/quote list", "user", "mock")
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
 	assert.EqualValues(t, resp.Text, "Only admins can list the quotes.")
@@ -273,48 +263,48 @@ func TestExecuteCommand(t *testing.T) {
 
 // TestExecuteCommandAdmin - Test the ExecuteCommand() triggers that require admin access.
 func TestExecuteCommandAdmin(t *testing.T) {
-	resp, err := runTestPluginCommandAdmin(t, "/quote channel")
+	resp, err := runTestPluginCommand(t, "/quote channel", "system", "mock")
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
 	assert.EqualValues(t, resp.Text, "You must specify a channel name.")
 
-	resp, err = runTestPluginCommandAdmin(t, "/quote channel ~town-square")
+	resp, err = runTestPluginCommand(t, "/quote channel ~town-square", "system", "mock")
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
 	assert.EqualValues(t, resp.Text, "Channel set to mock.")
 
-	resp, err = runTestPluginCommandAdmin(t, "/quote delete")
+	resp, err = runTestPluginCommand(t, "/quote delete", "system", "mock")
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
 	assert.EqualValues(t, resp.Text, "What quote? You have to specify a quote index.")
 
 	// TODO: Test this with a list of actual quotes.
-	resp, err = runTestPluginCommandAdmin(t, "/quote delete -1")
+	resp, err = runTestPluginCommand(t, "/quote delete -1", "system", "mock")
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
 	assert.EqualValues(t, resp.Text, "You can't delete quote -1, it doesn't exist.")
 
-	resp, err = runTestPluginCommandAdmin(t, "/quote delete 1")
+	resp, err = runTestPluginCommand(t, "/quote delete 1", "system", "mock")
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
 	assert.EqualValues(t, resp.Text, "You can't delete quote 1, it doesn't exist.")
 
-	resp, err = runTestPluginCommandAdmin(t, "/quote interval")
+	resp, err = runTestPluginCommand(t, "/quote interval", "system", "mock")
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
 	assert.EqualValues(t, resp.Text, "You have to specify an interval in minutes, >= 15.")
 
-	resp, err = runTestPluginCommandAdmin(t, "/quote interval 1")
+	resp, err = runTestPluginCommand(t, "/quote interval 1", "system", "mock")
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
 	assert.EqualValues(t, resp.Text, "You can't set an Interval less than 15 minutes, it's annoying.")
 
-	resp, err = runTestPluginCommandAdmin(t, "/quote interval 120")
+	resp, err = runTestPluginCommand(t, "/quote interval 120", "system", "mock")
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
 	assert.EqualValues(t, resp.Text, "Interval set to 120 minutes.")
 
-	resp, err = runTestPluginCommandAdmin(t, "/quote list")
+	resp, err = runTestPluginCommand(t, "/quote list", "system", "mock")
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
 	assert.EqualValues(t, resp.Text, "There are 0 quotes on file.")
@@ -338,31 +328,30 @@ func TestExecuteCommandAdmin(t *testing.T) {
 
 // TestIsAdmin - Test whether I can tell if you're an admin or not.
 func TestIsAdmin(t *testing.T) {
-	p := initTestPlugin(t, "normal")
+	p := initTestPlugin(t, "normal", "mock")
 	assert.False(t, p.IsAdmin("userid"))
 
-	p = initTestPlugin(t, "channel")
+	p = initTestPlugin(t, "channel", "mock")
 	assert.True(t, p.IsAdmin("userid"))
 
-	p = initTestPlugin(t, "team")
+	p = initTestPlugin(t, "team", "mock")
 	assert.True(t, p.IsAdmin("userid"))
 
-	p = initTestPlugin(t, "system")
+	p = initTestPlugin(t, "system", "mock")
 	assert.True(t, p.IsAdmin("userid"))
 
-	p = initTestPlugin(t, "everything")
+	p = initTestPlugin(t, "everything", "mock")
 	assert.True(t, p.IsAdmin("userid"))
 }
 
 // TestLoadQuotes - Test the LoadQuotes function.
 func TestLoadQuotes(t *testing.T) {
-	p := initTestPlugin(t, "normal")
+	p := initTestPlugin(t, "normal", "mock")
 	err := p.LoadQuotes()
 	assert.Nil(t, err)
 	assert.EqualValues(t, len(p.quotes), 0)
 
-	api := initAPI(t, "normal")
-	api.On("KVGet", mock.Anything).Return([]byte(`["quote 1", "quote 2"]`), nil)
+	api := initAPI(t, "normal", "mock", []byte(`["quote 1", "quote 2"]`))
 	p.SetAPI(api)
 	err = p.LoadQuotes()
 	assert.Nil(t, err)
@@ -371,7 +360,7 @@ func TestLoadQuotes(t *testing.T) {
 
 // TestNewResponse - Test the NewResponse function.
 func TestNewResponse(t *testing.T) {
-	p := initTestPlugin(t, "normal")
+	p := initTestPlugin(t, "normal", "mock")
 
 	resp := p.NewResponse("type", "string")
 	assert.EqualValues(t, resp.ResponseType, "type")
@@ -380,7 +369,7 @@ func TestNewResponse(t *testing.T) {
 
 // TestNewError - Test the NewError function.
 func TestNewError(t *testing.T) {
-	p := initTestPlugin(t, "normal")
+	p := initTestPlugin(t, "normal", "mock")
 
 	err := p.NewError("message", "details", "where")
 	assert.EqualValues(t, err.Message, "message")
@@ -396,24 +385,24 @@ func TestNewError(t *testing.T) {
 // This test is weak. Not sure how to mock this to test it in a useful way,
 // it's a fairly trivial function...
 func TestSaveQuotes(t *testing.T) {
-	p := initTestPlugin(t, "normal")
+	p := initTestPlugin(t, "normal", "mock")
 	assert.Nil(t, p.OnActivate())
 	assert.EqualValues(t, len(p.quotes), 0)
 }
 
 // TestShowQuote - Test the ShowQuote function.
 func TestShowQuote(t *testing.T) {
-	p := initTestPlugin(t, "normal")
+	p := initTestPlugin(t, "normal", "mock")
 	assert.Nil(t, p.OnActivate())
 	assert.EqualValues(t, len(p.quotes), 0)
 
-	resp, err := p.ShowQuote("foo") // "" calls ShowRandom() instead of ShowQuote().
+	resp, err := p.ShowQuote("userid", "foo") // "" calls ShowRandom() instead of ShowQuote().
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
 	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_EPHEMERAL)
 	assert.EqualValues(t, resp.Text, helpText)
 
-	resp, err = p.ShowQuote("1")
+	resp, err = p.ShowQuote("userid", "1")
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
 	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_EPHEMERAL)
@@ -423,13 +412,13 @@ func TestShowQuote(t *testing.T) {
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
 
-	resp, err = p.ShowQuote("1")
+	resp, err = p.ShowQuote("userid", "1")
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
 	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_IN_CHANNEL)
 	assert.EqualValues(t, resp.Text, "> quote 1")
 
-	resp, err = p.ShowQuote("2")
+	resp, err = p.ShowQuote("userid", "2")
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
 	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_EPHEMERAL)
@@ -438,11 +427,11 @@ func TestShowQuote(t *testing.T) {
 
 // TestShowRandom - Test the ShowRandom function.
 func TestShowRandom(t *testing.T) {
-	p := initTestPlugin(t, "normal")
+	p := initTestPlugin(t, "normal", "mock")
 	assert.Nil(t, p.OnActivate())
 	assert.EqualValues(t, len(p.quotes), 0)
 
-	resp, err := p.ShowRandom()
+	resp, err := p.ShowRandom("userid")
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
 	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_EPHEMERAL)
@@ -452,7 +441,7 @@ func TestShowRandom(t *testing.T) {
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
 
-	resp, err = p.ShowRandom()
+	resp, err = p.ShowRandom("userid")
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
 	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_IN_CHANNEL)
@@ -461,18 +450,69 @@ func TestShowRandom(t *testing.T) {
 
 // TestShowHelp - Test the ShowHelp function.
 func TestShowHelp(t *testing.T) {
-	p := initTestPlugin(t, "normal")
+	p := initTestPlugin(t, "normal", "mock")
 
-	resp, err := p.ShowHelp()
+	resp, err := p.ShowHelp("userid")
 	assert.NotNil(t, resp)
 	assert.Nil(t, err)
 	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_EPHEMERAL)
 	assert.EqualValues(t, resp.Text, helpText)
 }
 
+// TestShowHelpAdmin - Test the ShowHelp function.
+func TestShowHelpAdmin(t *testing.T) {
+	p := initTestPlugin(t, "system", "mock")
+
+	resp, err := p.ShowHelp("userid")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_EPHEMERAL)
+	assert.EqualValues(t, resp.Text, strings.Join([]string{helpText, adminHelpText}, "\n\n"))
+}
+
+// TestShowInfo - Test the ShowInfo function.
+func TestShowInfo(t *testing.T) {
+	p := initTestPlugin(t, "normal", "mock")
+	assert.Nil(t, p.OnActivate())
+
+	resp, err := p.ShowInfo("userid")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_EPHEMERAL)
+	assert.EqualValues(t, resp.Text, "You are a User. Quotebot knows 0 quotes. Monitoring mock for activity every 15 minutes.")
+
+	p = initTestPlugin(t, "normal", "fail")
+	assert.Nil(t, p.OnActivate())
+
+	resp, err = p.ShowInfo("userid")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_EPHEMERAL)
+	assert.EqualValues(t, resp.Text,
+		"You are a User. Quotebot knows 0 quotes. Monitoring a non-existent channel. An Admin should fix that.")
+
+	p = initTestPlugin(t, "channel", "mock")
+	assert.Nil(t, p.OnActivate())
+
+	resp, err = p.ShowInfo("userid")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_EPHEMERAL)
+	assert.EqualValues(t, resp.Text, "You are an Admin. Quotebot knows 0 quotes. Monitoring mock for activity every 15 minutes.")
+
+	p = initTestPlugin(t, "channel", "fail")
+	assert.Nil(t, p.OnActivate())
+
+	resp, err = p.ShowInfo("userid")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_EPHEMERAL)
+	assert.EqualValues(t, resp.Text, "You are an Admin. Quotebot knows 0 quotes. Monitoring a non-existent channel. An Admin should fix that.")
+}
+
 // TestAddQuote - Test the AddQuote function.
 func TestAddQuote(t *testing.T) {
-	p := initTestPlugin(t, "normal")
+	p := initTestPlugin(t, "normal", "mock")
 	assert.Nil(t, p.OnActivate())
 	assert.EqualValues(t, len(p.quotes), 0)
 
@@ -494,7 +534,7 @@ func TestAddQuote(t *testing.T) {
 // TestListQuotes - Test the ListQuotes function.
 func TestListQuotes(t *testing.T) {
 	// Regular user testing.
-	p := initTestPlugin(t, "normal")
+	p := initTestPlugin(t, "normal", "mock")
 	assert.Nil(t, p.OnActivate())
 
 	resp, err := p.ListQuotes("userid")
@@ -504,7 +544,7 @@ func TestListQuotes(t *testing.T) {
 	assert.EqualValues(t, resp.Text, "Only admins can list the quotes.")
 
 	// Admin testing.
-	p = initTestPlugin(t, "team")
+	p = initTestPlugin(t, "team", "mock")
 	assert.Nil(t, p.OnActivate())
 
 	resp, err = p.ListQuotes("userid")
@@ -537,7 +577,7 @@ func TestListQuotes(t *testing.T) {
 // TestDeleteQuote - Test the DeleteQuote function.
 func TestDeleteQuote(t *testing.T) {
 	// Regular user testing.
-	p := initTestPlugin(t, "normal")
+	p := initTestPlugin(t, "normal", "mock")
 	assert.Nil(t, p.OnActivate())
 
 	resp, err := p.DeleteQuote("userid", "1")
@@ -547,7 +587,7 @@ func TestDeleteQuote(t *testing.T) {
 	assert.EqualValues(t, resp.Text, "Only admins can delete quotes.")
 
 	// Admin testing.
-	p = initTestPlugin(t, "team")
+	p = initTestPlugin(t, "team", "mock")
 	assert.Nil(t, p.OnActivate())
 
 	resp, err = p.DeleteQuote("userid", "")
@@ -571,4 +611,114 @@ func TestDeleteQuote(t *testing.T) {
 	assert.Nil(t, err)
 	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_EPHEMERAL)
 	assert.EqualValues(t, resp.Text, "Deleted quote 1. There are 0 quotes on file.")
+}
+
+// TestSetChannel - test the SetChannel function.
+func TestSetChannel(t *testing.T) {
+	// Regular user testing.
+	p := initTestPlugin(t, "normal", "mock")
+	assert.Nil(t, p.OnActivate())
+
+	resp, err := p.SetChannel("userid", "town-square", "teamid")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_EPHEMERAL)
+	assert.EqualValues(t, resp.Text, "Only admins can set the channel.")
+
+	// Admin testing.
+	p = initTestPlugin(t, "team", "mock")
+	assert.Nil(t, p.OnActivate())
+
+	resp, err = p.SetChannel("userid", "", "teamid")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_EPHEMERAL)
+	assert.EqualValues(t, resp.Text, "You must specify a channel name.")
+
+	resp, err = p.SetChannel("userid", "~", "teamid")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_EPHEMERAL)
+	assert.EqualValues(t, resp.Text, "You must specify a channel name.")
+
+	resp, err = p.SetChannel("userid", "town-square", "teamid")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_EPHEMERAL)
+	assert.EqualValues(t, resp.Text, "Channel set to mock.")
+
+	resp, err = p.SetChannel("userid", "~town-square", "teamid")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_EPHEMERAL)
+	assert.EqualValues(t, resp.Text, "Channel set to mock.")
+
+	// Fails.
+	p = initTestPlugin(t, "team", "fail")
+	assert.Nil(t, p.OnActivate())
+
+	resp, err = p.SetChannel("userid", "town-square", "teamid")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_EPHEMERAL)
+	assert.EqualValues(t, resp.Text, "\"town-square\" isn't a valid channel, use one that exists.")
+
+	resp, err = p.SetChannel("userid", "~town-square", "teamid")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_EPHEMERAL)
+	assert.EqualValues(t, resp.Text, "\"town-square\" isn't a valid channel, use one that exists.")
+}
+
+// TestSetInterval - test the SetInterval function.
+func TestSetInterval(t *testing.T) {
+	// Regular user testing.
+	p := initTestPlugin(t, "normal", "mock")
+	assert.Nil(t, p.OnActivate())
+
+	resp, err := p.SetInterval("userid", "15")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_EPHEMERAL)
+	assert.EqualValues(t, resp.Text, "Only admins can set the interval.")
+
+	// Admin testing.
+	p = initTestPlugin(t, "team", "mock")
+	assert.Nil(t, p.OnActivate())
+
+	resp, err = p.SetInterval("userid", "")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_EPHEMERAL)
+	assert.EqualValues(t, resp.Text, "You have to specify an interval in minutes, >= 15.")
+
+	resp, err = p.SetInterval("userid", "cat")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_EPHEMERAL)
+	assert.EqualValues(t, resp.Text, "You have to specify an interval in minutes, >= 15.")
+
+	resp, err = p.SetInterval("userid", "5")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_EPHEMERAL)
+	assert.EqualValues(t, resp.Text, "You can't set an Interval less than 15 minutes, it's annoying.")
+
+	resp, err = p.SetInterval("userid", "15")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_EPHEMERAL)
+	assert.EqualValues(t, resp.Text, "Interval set to 15 minutes.")
+
+	resp, err = p.SetInterval("userid", "60")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_EPHEMERAL)
+	assert.EqualValues(t, resp.Text, "Interval set to 60 minutes.")
+
+	resp, err = p.SetInterval("userid", "10081")
+	assert.NotNil(t, resp)
+	assert.Nil(t, err)
+	assert.EqualValues(t, resp.ResponseType, model.COMMAND_RESPONSE_TYPE_EPHEMERAL)
+	assert.EqualValues(t, resp.Text, "You can't set the Interval to more than a week, that's excessive.")
 }
