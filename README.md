@@ -31,6 +31,7 @@ Admin commands:
 * /quote interval *x* - The time between automatically posting quotes
   in a channel.
 * /quote list - List all known quotes.
+* /quote user *x* - Post random quotes as the given user. You should use a bot.
 
 Periodically posts a random quote to a specified channel. Default is every 60
 minutes in `~town-square` if there's activity there.
@@ -84,3 +85,5 @@ functions in `server/plugin.go`:
 * [Mattermost's plugin sample](https://github.com/mattermost/mattermost-plugin-sample)
 * Icon from [Nick Roach](http://www.elegantthemes.com/)'s GPL'd
   [Circle Icons](https://www.iconfinder.com/iconsets/circle-icons-1) set.
+* Thanks to [Joram Wilander](https://github.com/jwilander) for pointing me in
+  the right direction via the Mattermost `~Developer Toolkit` channel.

@@ -15,6 +15,14 @@
         "footer": "Please report issues in the GitHub repo. All code is [MIT licensed](https://github.com/Taffer/ca.taffer.mm-quotebot/blob/develop/LICENSE). Full credits can be found in the [README](https://github.com/Taffer/ca.taffer.mm-rolly/blob/develop/README.md).",
         "settings": [
             {
+                "key": "user",
+                "display_name": "Quote User",
+                "type": "text",
+                "help_text": "The (bot) user who posts quotes randomly.",
+                "placeholder": "Name of a bot.",
+                "default": "Taffer"
+            },
+            {
                 "key": "channel",
                 "display_name": "Channel",
                 "type": "text",

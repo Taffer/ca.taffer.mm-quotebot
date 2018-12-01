@@ -61,7 +61,7 @@
 
 [[projects]]
   name = "github.com/mattermost/mattermost-server"
-  packages = ["einterfaces","mlog","model","plugin","utils","utils/jsonutils","utils/markdown"]
+  packages = ["einterfaces","mlog","model","plugin","plugin/plugintest/mock","utils","utils/jsonutils","utils/markdown"]
   revision = "d5b613cb1bbdaa856fa126e7102d94783b9e80b6"
   version = "v5.4.0"
 
@@ -145,8 +145,14 @@
   version = "v1.0.3"
 
 [[projects]]
+  name = "github.com/stretchr/objx"
+  packages = ["."]
+  revision = "477a77ecc69700c7cdeb1fa9e129548e1c1c393c"
+  version = "v0.1.1"
+
+[[projects]]
   name = "github.com/stretchr/testify"
-  packages = ["assert"]
+  packages = ["assert","mock"]
   revision = "f35b8ab0b5a2cef36673838d662e249dd9c94686"
   version = "v1.2.2"
 
@@ -219,6 +225,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "318f08029f8d590ba4e44fdd7d9836dc09f3e6b40b1c67d6f82c2ecf93379a43"
+  inputs-digest = "1c25a9297843f2c35b0ad9e6f6487994332be973549dcbc00142bbb5767b6631"
   solver-name = "gps-cdcl"
   solver-version = 1
