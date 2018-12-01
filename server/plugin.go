@@ -47,9 +47,9 @@ const (
 	slashTrigger string = "/" + trigger
 	pluginName   string = "Quotebot"
 
-	// ^/quote\s*(?P<command>(add|channel|delete|info|interval|list|user)\s*)?(?P<tail>.*)\s*$
+	// ^/quote\s*(?P<command>(add|channel|delete|info|interval|list)\s*)?(?P<tail>.*)\s*$
 	// TODO: Remove "debug" when we're done with it.
-	commandRegex string = `(?i)^` + slashTrigger + `\s*(?P<command>(debug|add|channel|delete|info|interval|list|user)\s*)?(?P<tail>.*)\s*$`
+	commandRegex string = `(?i)^` + slashTrigger + `\s*(?P<command>(debug|add|channel|delete|info|interval|list)\s*)?(?P<tail>.*)\s*$`
 
 	// I still haven't looked into i18n.
 	helpText = `Quotebot remembers quotes you tell it about, and spits them out again when you ask it to.
@@ -69,8 +69,7 @@ Commands:
 * /quote delete *x* - Delete quote number *x*.
 * /quote interval *x* - The time between automatically posting quotes
   in a channel.
-* /quote list - List all known quotes.
-* /quote user *x* - Post random quotes as the given user. You should use a bot.`
+* /quote list - List all known quotes.`
 )
 
 // -----------------------------------------------------------------------------

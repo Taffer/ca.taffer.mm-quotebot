@@ -31,7 +31,6 @@ Admin commands:
 * /quote interval *x* - The time between automatically posting quotes
   in a channel.
 * /quote list - List all known quotes.
-* /quote user *x* - Post random quotes as the given user. You should use a bot.
 
 Periodically posts a random quote to a specified channel. Default is every 60
 minutes in `~town-square` if there's activity there.

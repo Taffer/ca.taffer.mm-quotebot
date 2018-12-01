@@ -107,32 +107,6 @@ func (p *QuotebotPlugin) SetInterval(userID string, tail string) (*model.Command
 		fmt.Sprintf("Interval set to %v minutes.", p.configuration.postDelta)), nil
 }
 
-// SetUser - Set the (bot) account name used to post random quotes.
-func (p *QuotebotPlugin) SetUser(userID string, userName string) (*model.CommandResponse, *model.AppError) {
-	if p.IsAdmin(userID) == false {
-		return p.NewResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, "Only admins can set the post user."), nil
-	}
-
-	if len(userName) == 0 || userName == "@" {
-		return p.NewResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, "You must specify a user name."), nil
-	}
-
-	if userName[0:1] == "@" {
-		userName = userName[1:]
-	}
-
-	// Make sure this user is a user before we go crazy.
-	user, err := p.API.GetUserByUsername(userName)
-	if err != nil {
-		return p.NewResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, fmt.Sprintf("Unable to find a user named %q.", userName)), nil
-	}
-
-	p.userID = user.Id
-	p.configuration.postUser = user.Username
-
-	return p.NewResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, fmt.Sprintf("Quotes will be posted by %v.", user.Username)), nil
-}
-
 // -----------------------------------------------------------------------------
 // Quotebot commands
 // -----------------------------------------------------------------------------

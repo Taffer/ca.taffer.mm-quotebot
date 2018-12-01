@@ -119,10 +119,6 @@ func (p *QuotebotPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandAr
 		case "list":
 			// List all known quotes. Admins only.
 			response, responseError = p.ListQuotes(args.UserId)
-
-		case "user":
-			// Set the bot account used for posting. Admins only.
-			response, responseError = p.SetUser(args.UserId, tail)
 		}
 	}
 
@@ -141,7 +137,7 @@ func (p *QuotebotPlugin) MessageHasBeenPosted(c *plugin.Context, post *model.Pos
 	}
 
 	// Post a random quote, maybe.
-	p.PostRandom()
+	// p.PostRandom()
 }
 
 // UserHasJoinedChannel - another trigger for periodically posting
@@ -155,7 +151,7 @@ func (p *QuotebotPlugin) UserHasJoinedChannel(c *plugin.Context, channelMember *
 	}
 
 	// Post a random quote, maybe.
-	p.PostRandom()
+	// p.PostRandom()
 }
 
 // UserHasLeftChannel - another trigger for periodically posting
@@ -169,5 +165,5 @@ func (p *QuotebotPlugin) UserHasLeftChannel(c *plugin.Context, channelMember *mo
 	}
 
 	// Post a random quote, maybe.
-	p.PostRandom()
+	// p.PostRandom()
 }
